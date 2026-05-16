@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   // IMPORTANT: Replace with your laptop's local IP address (e.g., 192.168.1.5)
   // Do NOT use 'localhost' for physical phones.
-  static const String baseUrl = 'http://192.168.1.71:8000/api';
+  static const String baseUrl = 'http://192.168.1.38:8000/api';
   // Inside your ApiService class
   // lib/services/api_service.dart
 
@@ -86,7 +86,8 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception("Invalid credentials");
+      final errorMsg = jsonDecode(response.body)['error'] ?? "Login failed";
+      throw Exception(errorMsg);
     }
   }
 
@@ -199,15 +200,16 @@ class ApiService {
   }
 
   // 6. Chat with AI (New)
-  static Future<Map<String, dynamic>> chatWithAI(String query) async {
+  static Future<Map<String, dynamic>> chatWithAI(String query, int userId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/chat/'),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"query": query}),
+      body: jsonEncode({"query": query, "user_id": userId}),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      return {"reply": data['response'] ?? "No response"};
     } else {
       throw Exception("Failed to chat with AI: ${response.body}");
     }
@@ -270,7 +272,18 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data['tips'] ?? [];
     } else {
-      throw Exception("Failed to load AI tips");
+      return [];
+    }
+  }
+
+  // 11. Get Home Stats
+  static Future<Map<String, dynamic>> getHomeStats(int userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/home-stats/$userId/'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Failed to load home stats");
     }
   }
 }

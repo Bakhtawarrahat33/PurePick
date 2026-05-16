@@ -124,8 +124,8 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Calculate Safety Score (Inverse of Hazard Score)
-    final int safetyScore = (100 - widget.score).clamp(0, 100).toInt();
+    // The backend now sends the Safety Score directly (100 = Safe)
+    final int safetyScore = widget.score.clamp(0, 100).toInt();
 
     // 2. Determine Color Status based on SAFETY Score
     final bool isSafe = safetyScore > 70; // >70% safe is Green

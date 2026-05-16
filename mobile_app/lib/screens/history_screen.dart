@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import 'result_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -54,13 +55,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
               // Assuming API returns: {'score': float, 'date': string, ...}
 
               final double score = (item['score'] ?? 0).toDouble();
-              // We need to map HAZARD score (backend) to SAFETY score (frontend)
-              // Backend: 100 = Danger. Frontend: 100 = Safe.
-              final int safetyScore = (100 - score).clamp(0, 100).toInt();
-
-              Color scoreColor = safetyScore > 70
+              // Backend now sends a 100-based Safety Score directly
+              final int safetyScore = score.toInt().clamp(0, 100);
+              
+              Color scoreColor = safetyScore >= 70
                   ? Colors.green
-                  : (safetyScore > 40 ? Colors.orange : Colors.red);
+                  : (safetyScore >= 40 ? Colors.orange : Colors.red);
 
               return Card(
                 elevation: 2,
@@ -69,6 +69,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
+                  onTap: () {
+                    // Navigate to ResultScreen with the historical data
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ResultScreen(
+                          score: score,
+                          riskLevel: item['risk_level'] ?? 'moderate',
+                          dangerItems: List<Map<String, dynamic>>.from(item['flagged_ingredients'] ?? []),
+                          aiInsight: item['ai_analysis'] ?? '',
+                          personalWarnings: item['personal_warnings'] ?? '',
+                        ),
+                      ),
+                    );
+                  },
                   leading: CircleAvatar(
                     backgroundColor: scoreColor,
                     child: Text(
@@ -79,7 +94,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                   ),
-                  title: Text("Scan #${item['id']}"),
+                  title: Text(item['product_name'] ?? "Scan #${item['id']}"),
                   subtitle: Text(item['date'] ?? 'Unknown Date'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 ),

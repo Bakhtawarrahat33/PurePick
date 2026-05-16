@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'result_screen.dart';
 
 class AnalysisScreen extends StatefulWidget {
@@ -23,49 +23,41 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   Future<void> _startAiAnalysis() async {
     try {
-      // 1. Prepare the image request to your Django backend
-      // Use 'http://10.0.2.2:8000/scanner/analyze/' if on Android Emulator
-      // Use 'http://127.0.0.1:8000/scanner/analyze/' if on Chrome
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://127.0.0.1:8000/api/analyze/'),
-      );
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('user_id') ?? 0;
 
-      request.files.add(
-        await http.MultipartFile.fromPath('image', widget.imagePath),
-      );
+      // Use the professional ApiService we configured
+      final results = await ApiService.analyzeLabelImage(widget.imagePath, userId);
 
-      // 2. Send the image and wait for PaddleOCR & Sentence Transformer results
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      if (mounted) {
+        // Map the new Phase III+ report structure to the Result Screen
+        final riskData = results['risk'] ?? {};
+        final allergyData = results['allergy_result'] ?? {};
+        
+        final totalScore = (results['overall_score'] ?? 0).toDouble();
+        final riskLevel = riskData['risk_band'] ?? "Unknown";
+        final verdict = allergyData['overall_verdict'] ?? '';
+        
+        // Assemble justifications and alerts into a displayable string
+        final List alerts = allergyData['allergy_alerts'] ?? [];
+        String personalWarnings = alerts.isNotEmpty 
+          ? alerts.map((e) => "?? ${e['plain_explanation']}").join("\n\n")
+          : "✅ This product appears safe based on your profile.";
 
-      if (response.statusCode == 200) {
-        var results = json.decode(response.body);
-
-        if (mounted) {
-          // 3. Move to the Result Screen with the real dataset matches
-          final totalScore = (results['score'] ?? 0).toDouble();
-          final riskLevel = results['risk_level'] ?? "Unknown";
-          final aiInsight = results['ai_insight'] ?? '';
-          final personalWarnings = results['personal_warnings'] ?? '';
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ResultScreen(
-                score: totalScore.clamp(0, 100).toDouble(),
-                riskLevel: riskLevel,
-                dangerItems: List<Map<String, dynamic>>.from(
-                  results['danger_items'] ?? [],
-                ),
-                aiInsight: aiInsight,
-                personalWarnings: personalWarnings,
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultScreen(
+              score: totalScore.clamp(0, 100).toDouble(),
+              riskLevel: riskLevel,
+              dangerItems: List<Map<String, dynamic>>.from(
+                results['ingredient_breakdown'] ?? [],
               ),
+              aiInsight: verdict,
+              personalWarnings: personalWarnings,
             ),
-          );
-        }
-      } else {
-        setState(() => _isError = true);
+          ),
+        );
       }
     } catch (e) {
       debugPrint("Analysis Error: $e");

@@ -20,9 +20,10 @@ class _LoginScreenState extends State<LoginScreen> {
   // UPDATED: Use the WEB CLIENT ID for serverClientId to get the idToken.
   // Do NOT use the Android Client ID here.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Web Client ID from google-services.json (client_type: 3)
-    serverClientId:
-        '246071274413-r1n4f64sr3nm7n4k5jg955rj3ouavnq7.apps.googleusercontent.com',
+    // Android Client ID (type 1)
+    clientId: '246071274413-62pbvb1no6cpopp3r70olhg07pitcjun.apps.googleusercontent.com',
+    // Web Client ID (type 3)
+    serverClientId: '246071274413-f4vi28rg12rg8sheakec85u7pmgc7dmr.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
   );
 
@@ -42,8 +43,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await ApiService.loginWithGoogle(googleAuth.idToken);
 
       final prefs = await SharedPreferences.getInstance();
-      // FIXING THE RED SCREEN: We use toString() or interpolation for IDs
-      await prefs.setInt('user_id', response['user_id']);
+      
+      // Robust ID storage
+      final userId = response['user_id'];
+      if (userId is int) {
+        await prefs.setInt('user_id', userId);
+      } else if (userId is String) {
+        await prefs.setInt('user_id', int.tryParse(userId) ?? 0);
+      }
       await prefs.setString('user_name', googleUser.displayName ?? "User");
 
       if (!mounted) return;
@@ -144,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 backgroundColor: Colors.red,
-                                content: Text("Error: $e"),
+                                content: Text(e.toString().replaceAll('Exception: ', '')),
                               ),
                             );
                           }

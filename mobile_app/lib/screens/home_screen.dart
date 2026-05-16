@@ -18,14 +18,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _name = "Safety Scanner";
-  List<dynamic> _recentScans = [];
+  Map<String, dynamic>? _homeStats;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
-    _loadHistory();
+    _fetchStats();
   }
 
   Future<void> _loadUser() async {
@@ -37,26 +37,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _fetchStats() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getInt('user_id') ?? 1;
     try {
-      final history = await ApiService.getHistory(userId);
+      final stats = await ApiService.getHomeStats(userId);
       if (mounted) {
         setState(() {
-          _recentScans = history;
+          _homeStats = stats;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print("Error loading history: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          // Fallback to empty list or mock data if needed
-          _recentScans = [];
-        });
-      }
+      debugPrint("Error loading stats: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -136,11 +130,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _buildStatCard(
                         "Total Scans",
-                        "${_recentScans.length}",
+                        "${_homeStats?['total_scans'] ?? 0}",
                         Icons.verified_user_outlined,
                       ),
                       const SizedBox(width: 15),
-                      _buildStatCard("Avg Safety", "89%", Icons.show_chart),
+                      _buildStatCard("Avg Safety", _homeStats?['avg_safety'] ?? "0%", Icons.show_chart),
                     ],
                   ),
                 ],
@@ -286,74 +280,68 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
 
-                  // Recent Scans List
                   _isLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _recentScans.take(3).length, // Show top 3
-                          itemBuilder: (context, index) {
-                            final scan = _recentScans[index];
-                            final score = scan['score'] ?? 0.0;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 15),
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(15),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          "Scan #${scan['id']}", // Using ID for now as name isn't stored yet
-                                          style: GoogleFonts.poppins(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(
-                                        "${score.toInt()}%",
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.bold,
-                                          color: score > 70
-                                              ? Colors.red
-                                              : Colors.green,
-                                        ),
+                      : (_homeStats?['recent_scans'] as List? ?? []).isEmpty
+                          ? Center(child: Text("No scans yet", style: GoogleFonts.poppins(color: Colors.grey)))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: (_homeStats?['recent_scans'] as List? ?? []).length,
+                              itemBuilder: (context, index) {
+                                final scan = (_homeStats?['recent_scans'] as List)[index];
+                                final score = (scan['score'] ?? 0).toDouble();
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 15),
+                                  padding: const EdgeInsets.all(15),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(15),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.1),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: score / 100,
-                                      backgroundColor: Colors.grey[200],
-                                      color: score > 70
-                                          ? Colors.red
-                                          : Colors.green,
-                                      minHeight: 6,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              scan['name'] ?? "Unknown Product",
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            "${score.toInt()}%",
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.bold,
+                                              color: score < 40 ? Colors.red : score < 70 ? Colors.orange : Colors.green,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(scan['date'] ?? "", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                                          Text(scan['band'] ?? "", style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                                );
+                              },
+                            ),
                 ],
               ),
             ),
